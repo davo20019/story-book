@@ -1,4 +1,4 @@
-# Story Nook
+# StoryBook
 
 An AI-powered storybook generator for kids and parents. Type or dictate a story idea, and the app creates a fully illustrated, multi-page picture book you can read together — complete with page-by-page navigation and read-aloud narration.
 
