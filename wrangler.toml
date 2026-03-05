@@ -1,0 +1,27 @@
+name = "storybook-generator"
+main = "src/index.ts"
+compatibility_date = "2026-03-05"
+workers_dev = true
+
+# Uncomment and set your custom domain if desired:
+# [[routes]]
+# pattern = "story.yourdomain.com"
+# custom_domain = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "storybook-db"
+database_id = "<YOUR_D1_DATABASE_ID>"
+
+[[r2_buckets]]
+binding = "STORYBOOK_BUCKET"
+bucket_name = "storybook-assets"
+
+[vars]
+GEMINI_TEXT_MODEL = "gemini-2.5-flash"
+GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
+MAX_PAGES = "8"

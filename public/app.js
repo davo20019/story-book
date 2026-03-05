@@ -1,0 +1,493 @@
+const form = document.querySelector('#generate-form');
+const promptInput = document.querySelector('#prompt-input');
+const pageCountInput = document.querySelector('#page-count');
+const statusEl = document.querySelector('#status');
+const storiesShelf = document.querySelector('#stories-shelf');
+const dictateBtn = document.querySelector('#dictate-btn');
+const loadingIndicator = document.querySelector('#loading-indicator');
+
+// Reader elements
+const readerEmpty = document.querySelector('#reader-empty');
+const readerActive = document.querySelector('#reader-active');
+const readerTitle = document.querySelector('#reader-title');
+const readerPrompt = document.querySelector('#reader-prompt');
+const bookPageDisplay = document.querySelector('#book-page-display');
+const bookPageImg = document.querySelector('#book-page-img');
+const bookPageNumber = document.querySelector('#book-page-number');
+const bookPageText = document.querySelector('#book-page-text');
+const prevPageBtn = document.querySelector('#prev-page');
+const nextPageBtn = document.querySelector('#next-page');
+const pageDotsContainer = document.querySelector('#page-dots');
+
+// Tab elements
+const tabButtons = document.querySelectorAll('.tab-btn');
+const tabPanels = document.querySelectorAll('.tab-panel');
+
+const CARD_COLORS = ['coral', 'teal', 'lavender', 'sunshine', 'mint'];
+const CARD_ICONS = ['\u{1F4D6}', '\u{1F31F}', '\u{1F98A}', '\u{1F319}', '\u{1F308}', '\u{1F43B}', '\u{1F98B}', '\u{1F3F0}', '\u{1F680}', '\u{1F338}', '\u{1F409}', '\u{1F9F8}'];
+
+const state = {
+  stories: [],
+  activeStory: null,
+  currentPage: 0,
+  loading: false,
+  reading: false,
+  readingUtterance: null,
+};
+
+boot();
+
+async function boot() {
+  configureSpeechRecognition();
+  bindEvents();
+  await loadStories();
+}
+
+function bindEvents() {
+  // Tab navigation
+  for (const btn of tabButtons) {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  }
+
+  // Form submit
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (state.loading) return;
+
+    const prompt = promptInput.value.trim();
+    const pageCount = Number.parseInt(pageCountInput.value, 10);
+
+    if (!prompt) {
+      setStatus('Oops! Write a story idea first.');
+      return;
+    }
+
+    setLoading(true);
+    setStatus('');
+
+    try {
+      const response = await fetch('/api/stories/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt, pageCount }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Generation failed.');
+      }
+
+      const { story } = payload;
+      state.activeStory = story;
+      state.currentPage = 0;
+      setStatus('');
+
+      await loadStories();
+      renderReader();
+      switchTab('reader');
+      celebrateSparkles();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Generation failed.');
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  // Page navigation
+  prevPageBtn.addEventListener('click', () => goToPage(state.currentPage - 1));
+  nextPageBtn.addEventListener('click', () => goToPage(state.currentPage + 1));
+
+  // Keyboard navigation for reader
+  document.addEventListener('keydown', (e) => {
+    const readerPanel = document.querySelector('#panel-reader');
+    if (!readerPanel.classList.contains('active') || !state.activeStory) return;
+
+    if (e.key === 'ArrowLeft') goToPage(state.currentPage - 1);
+    if (e.key === 'ArrowRight') goToPage(state.currentPage + 1);
+  });
+}
+
+function switchTab(tabName) {
+  stopReading();
+
+  for (const btn of tabButtons) {
+    const isActive = btn.dataset.tab === tabName;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', String(isActive));
+  }
+
+  for (const panel of tabPanels) {
+    const isActive = panel.id === `panel-${tabName}`;
+    panel.classList.toggle('active', isActive);
+  }
+}
+
+function configureSpeechRecognition() {
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!Recognition) return;
+
+  dictateBtn.hidden = false;
+  const recognition = new Recognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  dictateBtn.addEventListener('click', () => {
+    try {
+      recognition.start();
+      setStatus('Listening...');
+    } catch {
+      // Ignore repeated start() errors
+    }
+  });
+
+  recognition.onresult = (event) => {
+    const transcript = event.results?.[0]?.[0]?.transcript?.trim();
+    if (!transcript) return;
+
+    const spacer = promptInput.value.trim().length ? ' ' : '';
+    promptInput.value = `${promptInput.value.trim()}${spacer}${transcript}`.trim();
+    setStatus('Voice input added!');
+  };
+
+  recognition.onerror = () => {
+    setStatus('Voice input failed. Try typing instead!');
+  };
+}
+
+async function loadStories() {
+  try {
+    const response = await fetch('/api/stories');
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || 'Could not load stories.');
+    }
+
+    state.stories = payload.stories || [];
+    renderStoriesShelf();
+
+    if (!state.activeStory && state.stories.length > 0) {
+      await openStory(state.stories[0].id);
+    }
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Could not load stories.');
+  }
+}
+
+function renderStoriesShelf() {
+  // Clear existing content safely
+  while (storiesShelf.firstChild) {
+    storiesShelf.removeChild(storiesShelf.firstChild);
+  }
+
+  if (state.stories.length === 0) {
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'shelf-empty';
+    const p = document.createElement('p');
+    p.textContent = 'No stories yet \u2014 go create your first one!';
+    emptyDiv.appendChild(p);
+    storiesShelf.appendChild(emptyDiv);
+    return;
+  }
+
+  state.stories.forEach((story, index) => {
+    const card = document.createElement('div');
+    card.className = 'book-card';
+    card.dataset.color = CARD_COLORS[index % CARD_COLORS.length];
+    card.addEventListener('click', () => openStory(story.id));
+
+    // Cover
+    const coverDiv = document.createElement('div');
+    coverDiv.className = 'book-card-cover';
+
+    if (story.coverImageUrl) {
+      const img = document.createElement('img');
+      img.src = story.coverImageUrl;
+      img.alt = '';
+      img.loading = 'lazy';
+      coverDiv.appendChild(img);
+    } else {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'book-card-cover-placeholder';
+      placeholder.textContent = CARD_ICONS[index % CARD_ICONS.length];
+      coverDiv.appendChild(placeholder);
+    }
+
+    card.appendChild(coverDiv);
+
+    // Body
+    const bodyDiv = document.createElement('div');
+    bodyDiv.className = 'book-card-body';
+
+    const title = document.createElement('h3');
+    title.className = 'book-card-title';
+    title.textContent = story.title;
+    bodyDiv.appendChild(title);
+
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'book-card-meta';
+
+    const dateSpan = document.createElement('span');
+    dateSpan.textContent = formatDate(story.createdAt);
+    metaDiv.appendChild(dateSpan);
+
+    const pagesSpan = document.createElement('span');
+    pagesSpan.className = 'book-card-pages';
+    pagesSpan.textContent = `${story.pageCount} pages`;
+    metaDiv.appendChild(pagesSpan);
+
+    bodyDiv.appendChild(metaDiv);
+    card.appendChild(bodyDiv);
+
+    // Stagger entrance animation
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(16px)';
+    card.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+    setTimeout(() => {
+      card.style.opacity = '1';
+      card.style.transform = 'translateY(0)';
+    }, index * 80);
+
+    storiesShelf.appendChild(card);
+  });
+}
+
+async function openStory(storyId) {
+  try {
+    const response = await fetch(`/api/stories/${encodeURIComponent(storyId)}`);
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || 'Could not load story.');
+    }
+
+    state.activeStory = payload.story;
+    state.currentPage = 0;
+    renderReader();
+    switchTab('reader');
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Could not load story.');
+  }
+}
+
+function renderReader() {
+  if (!state.activeStory) {
+    readerEmpty.hidden = false;
+    readerActive.hidden = true;
+    return;
+  }
+
+  readerEmpty.hidden = true;
+  readerActive.hidden = false;
+
+  const story = state.activeStory;
+  readerTitle.textContent = story.title;
+  readerPrompt.textContent = story.prompt;
+
+  renderPageDots();
+  renderCurrentPage();
+}
+
+function renderPageDots() {
+  while (pageDotsContainer.firstChild) {
+    pageDotsContainer.removeChild(pageDotsContainer.firstChild);
+  }
+
+  const pages = getSortedPages();
+
+  // Read-aloud button
+  const readBtn = document.createElement('button');
+  readBtn.className = 'page-dot';
+  readBtn.title = 'Read aloud';
+  readBtn.textContent = '\u{1F50A}';
+  readBtn.style.cssText = 'width:auto;height:auto;padding:2px 8px;border-radius:999px;font-size:0.85rem;margin-right:8px;';
+  readBtn.addEventListener('click', () => {
+    if (state.reading) {
+      stopReading();
+    } else {
+      readAloud();
+    }
+  });
+  pageDotsContainer.appendChild(readBtn);
+
+  pages.forEach((_, index) => {
+    const dot = document.createElement('button');
+    dot.className = `page-dot${index === state.currentPage ? ' active' : ''}`;
+    dot.setAttribute('aria-label', `Page ${index + 1}`);
+    dot.addEventListener('click', () => goToPage(index));
+    pageDotsContainer.appendChild(dot);
+  });
+}
+
+function renderCurrentPage() {
+  const pages = getSortedPages();
+
+  if (!pages.length) {
+    bookPageImg.src = '';
+    bookPageImg.alt = '';
+    bookPageNumber.textContent = '';
+    bookPageText.textContent = 'This story has no pages.';
+    prevPageBtn.disabled = true;
+    nextPageBtn.disabled = true;
+    return;
+  }
+
+  const page = pages[state.currentPage];
+  const total = pages.length;
+  const num = page.pageNumber || state.currentPage + 1;
+
+  if (page.imageUrl) {
+    bookPageImg.src = page.imageUrl;
+    bookPageImg.alt = `Illustration for page ${num}`;
+    bookPageImg.parentElement.style.display = '';
+  } else {
+    bookPageImg.src = '';
+    bookPageImg.alt = '';
+    bookPageImg.parentElement.style.display = 'none';
+  }
+
+  bookPageNumber.textContent = `Page ${num} of ${total}`;
+  bookPageText.textContent = page.text;
+
+  prevPageBtn.disabled = state.currentPage <= 0;
+  nextPageBtn.disabled = state.currentPage >= total - 1;
+
+  // Update dots
+  const dots = pageDotsContainer.querySelectorAll('.page-dot:not([title])');
+  dots.forEach((dot, i) => {
+    dot.classList.toggle('active', i === state.currentPage);
+  });
+
+  // Animate the page
+  bookPageDisplay.style.animation = 'none';
+  bookPageDisplay.offsetHeight; // trigger reflow
+  bookPageDisplay.style.animation = 'pageFlip 0.35s ease';
+}
+
+function goToPage(index) {
+  const pages = getSortedPages();
+  if (index < 0 || index >= pages.length) return;
+  state.currentPage = index;
+  renderCurrentPage();
+}
+
+function getSortedPages() {
+  if (!state.activeStory?.pages) return [];
+  return [...state.activeStory.pages].sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
+}
+
+// ---- Read aloud ----
+function readAloud() {
+  if (!window.speechSynthesis) return;
+
+  stopReading();
+  state.reading = true;
+
+  const pages = getSortedPages();
+  if (!pages.length) return;
+
+  readPageAloud(state.currentPage, pages);
+}
+
+function readPageAloud(pageIndex, pages) {
+  if (!state.reading || pageIndex >= pages.length) {
+    stopReading();
+    return;
+  }
+
+  goToPage(pageIndex);
+
+  const utterance = new SpeechSynthesisUtterance(pages[pageIndex].text);
+  utterance.rate = 0.85;
+  utterance.pitch = 1.1;
+  state.readingUtterance = utterance;
+
+  utterance.onend = () => {
+    if (state.reading && pageIndex + 1 < pages.length) {
+      setTimeout(() => readPageAloud(pageIndex + 1, pages), 600);
+    } else {
+      stopReading();
+    }
+  };
+
+  utterance.onerror = () => {
+    stopReading();
+  };
+
+  window.speechSynthesis.speak(utterance);
+
+  // Update read-aloud button appearance
+  const readBtn = pageDotsContainer.querySelector('[title]');
+  if (readBtn) {
+    readBtn.textContent = '\u23F9';
+    readBtn.title = 'Stop reading';
+  }
+}
+
+function stopReading() {
+  state.reading = false;
+  state.readingUtterance = null;
+
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
+
+  const readBtn = pageDotsContainer.querySelector('[title]');
+  if (readBtn) {
+    readBtn.textContent = '\u{1F50A}';
+    readBtn.title = 'Read aloud';
+  }
+}
+
+// ---- Utilities ----
+function setStatus(message) {
+  statusEl.textContent = message;
+}
+
+function setLoading(isLoading) {
+  state.loading = isLoading;
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = isLoading;
+  loadingIndicator.hidden = !isLoading;
+}
+
+function celebrateSparkles() {
+  const colors = ['#FF8C6B', '#6BC5E8', '#FFD166', '#C3A6E0', '#7EDDB5'];
+
+  for (let i = 0; i < 20; i++) {
+    const sparkle = document.createElement('div');
+    sparkle.className = 'celebration-sparkle';
+    sparkle.style.left = `${30 + Math.random() * 40}%`;
+    sparkle.style.top = `${20 + Math.random() * 30}%`;
+    sparkle.style.background = colors[Math.floor(Math.random() * colors.length)];
+    sparkle.style.animationDelay = `${Math.random() * 0.5}s`;
+    const size = `${8 + Math.random() * 12}px`;
+    sparkle.style.width = size;
+    sparkle.style.height = size;
+    document.body.appendChild(sparkle);
+    setTimeout(() => sparkle.remove(), 1200);
+  }
+}
+
+function escapeHtml(input) {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatDate(isoString) {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Story Nook</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- floating decorations -->
+    <div class="decoration deco-star deco-star-1" aria-hidden="true"></div>
+    <div class="decoration deco-star deco-star-2" aria-hidden="true"></div>
+    <div class="decoration deco-star deco-star-3" aria-hidden="true"></div>
+    <div class="decoration deco-cloud deco-cloud-1" aria-hidden="true"></div>
+    <div class="decoration deco-cloud deco-cloud-2" aria-hidden="true"></div>
+    <div class="decoration deco-moon" aria-hidden="true"></div>
+
+    <header class="app-header">
+      <h1 class="logo">
+        <span class="logo-icon" aria-hidden="true">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+            <path d="M4 8c0-2 1.5-4 4-4h8c1 0 2 .5 2 2v24c0 1-1 2-2 2H8c-2.5 0-4-2-4-4V8z" fill="#FF8C6B" opacity="0.85"/>
+            <path d="M18 6c0-1.5 1-2 2-2h8c2.5 0 4 2 4 4v20c0 2-1.5 4-4 4h-8c-1 0-2-1-2-2V6z" fill="#6BC5E8" opacity="0.85"/>
+            <path d="M16 6h4v24h-4z" fill="#FFD166" opacity="0.7"/>
+          </svg>
+        </span>
+        Story Nook
+      </h1>
+      <nav class="tab-nav" role="tablist">
+        <button class="tab-btn active" role="tab" aria-selected="true" data-tab="create">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Create
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="library">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          My Books
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="reader">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+          Read
+        </button>
+      </nav>
+    </header>
+
+    <main class="app-main">
+      <!-- CREATE TAB -->
+      <section class="tab-panel active" id="panel-create" role="tabpanel">
+        <div class="create-card">
+          <div class="create-header">
+            <h2>What story shall we make?</h2>
+            <p>Type your idea or use your voice — let the magic begin!</p>
+          </div>
+
+          <form id="generate-form" class="story-form">
+            <div class="input-group">
+              <label for="prompt-input">Your story idea</label>
+              <textarea
+                id="prompt-input"
+                name="prompt"
+                rows="4"
+                placeholder="A brave fox and a shy firefly explore a glowing forest and learn to trust each other..."
+                required
+              ></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="input-group input-group-small">
+                <label for="page-count">How many pages?</label>
+                <select id="page-count" name="pageCount">
+                  <option value="4">4 pages</option>
+                  <option value="6">6 pages</option>
+                  <option value="8" selected>8 pages</option>
+                </select>
+              </div>
+              <button id="dictate-btn" type="button" class="btn btn-voice" hidden>
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                Use Voice
+              </button>
+            </div>
+
+            <button type="submit" class="btn btn-magic">
+              <span class="btn-sparkle" aria-hidden="true"></span>
+              Generate Storybook
+              <span class="btn-sparkle" aria-hidden="true"></span>
+            </button>
+          </form>
+
+          <div id="status" class="status" aria-live="polite"></div>
+
+          <div id="loading-indicator" class="loading-indicator" hidden>
+            <div class="loading-book">
+              <div class="loading-page loading-page-1"></div>
+              <div class="loading-page loading-page-2"></div>
+              <div class="loading-page loading-page-3"></div>
+            </div>
+            <p class="loading-text">Crafting your story...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- LIBRARY TAB -->
+      <section class="tab-panel" id="panel-library" role="tabpanel">
+        <div class="library-header">
+          <h2>My Bookshelf</h2>
+        </div>
+        <div id="stories-shelf" class="stories-shelf"></div>
+      </section>
+
+      <!-- READER TAB -->
+      <section class="tab-panel" id="panel-reader" role="tabpanel">
+        <div id="reader-empty" class="reader-empty">
+          <div class="empty-book-icon" aria-hidden="true">
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+              <path d="M10 18c0-4 3-8 8-8h16c2 0 6 1 6 5v50c0 3-4 5-6 5H18c-5 0-8-4-8-8V18z" fill="#FF8C6B" opacity="0.5"/>
+              <path d="M40 15c0-4 4-5 6-5h16c5 0 8 4 8 8v44c0 4-3 8-8 8H46c-2 0-6-2-6-5V15z" fill="#6BC5E8" opacity="0.5"/>
+              <path d="M36 15h8v50h-8z" fill="#FFD166" opacity="0.4"/>
+            </svg>
+          </div>
+          <p>Pick a story from <strong>My Books</strong> or <strong>Create</strong> a new one!</p>
+        </div>
+
+        <div id="reader-active" class="reader-active" hidden>
+          <div class="reader-title-bar">
+            <h2 id="reader-title"></h2>
+            <p id="reader-prompt" class="reader-prompt"></p>
+          </div>
+
+          <div class="book-spread">
+            <button id="prev-page" class="page-arrow page-arrow-left" type="button" aria-label="Previous page" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+
+            <article id="book-page-display" class="book-page-display">
+              <div class="book-page-image-wrap">
+                <img id="book-page-img" src="" alt="" loading="eager" />
+              </div>
+              <div class="book-page-content">
+                <p id="book-page-number" class="book-page-number"></p>
+                <p id="book-page-text" class="book-page-text"></p>
+              </div>
+            </article>
+
+            <button id="next-page" class="page-arrow page-arrow-right" type="button" aria-label="Next page" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+
+          <div class="page-dots" id="page-dots"></div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
