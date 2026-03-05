@@ -101,27 +101,7 @@ function resetTurnstile() {
 }
 
 // ---- Surprise me ----
-const SURPRISE_PROMPTS = [
-  'A tiny dragon who is afraid of fire learns to be brave with the help of a kind owl.',
-  'A penguin travels to the jungle and discovers a world of colorful butterflies.',
-  'Two siblings find a magical door in their attic that leads to a candy kingdom.',
-  'A lost star falls from the sky and a little mouse helps it find its way home.',
-  'A bear cub and a baby deer become best friends during their first winter.',
-  'A pirate cat sails across a milk ocean to find the legendary golden fish.',
-  'A shy cloud learns to make rainbows after meeting a cheerful sunbeam.',
-  'A robot and a puppy go on an adventure to find the last flower on Earth.',
-  'A little girl discovers she can talk to trees, and they have the funniest jokes.',
-  'An octopus opens an underwater bakery and makes cakes for all the sea creatures.',
-  'A family of foxes moves to a new forest and makes unexpected friends.',
-  'A magical paintbrush brings everything it draws to life in a quiet village.',
-  'Twin kittens explore a haunted house that turns out to be full of friendly ghosts.',
-  'A baby elephant gets lost in a rainstorm and is rescued by a troupe of dancing frogs.',
-  'A grandma and her granddaughter build a rocket ship out of cardboard and fly to the moon.',
-];
-
-function getRandomPrompt() {
-  return SURPRISE_PROMPTS[Math.floor(Math.random() * SURPRISE_PROMPTS.length)];
-}
+const SURPRISE_PROMPT = 'Surprise me! Invent a completely original, fun, and imaginative children\'s story. Pick unexpected characters, a unique setting, and a heartwarming twist. Be creative!';
 
 // ---- Photo uploads ----
 function addPhotoEntry() {
@@ -269,7 +249,7 @@ function bindEvents() {
   // Surprise me
   surpriseBtn.addEventListener('click', () => {
     if (state.loading) return;
-    promptInput.value = getRandomPrompt();
+    promptInput.value = SURPRISE_PROMPT;
     form.requestSubmit();
   });
 
