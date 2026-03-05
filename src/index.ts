@@ -11,6 +11,12 @@ interface Env {
   DAILY_LIMIT_PER_IP?: string;
 }
 
+interface ReferenceImage {
+  base64: string;
+  mimeType: string;
+  description: string;
+}
+
 interface GenerateStoryRequest {
   prompt?: string;
   transcript?: string;
@@ -18,6 +24,7 @@ interface GenerateStoryRequest {
   audioMimeType?: string;
   pageCount?: number;
   turnstileToken?: string;
+  referenceImages?: ReferenceImage[];
 }
 
 interface StoryPage {
@@ -29,6 +36,7 @@ interface StoryPage {
 interface GeneratedStory {
   title: string;
   transcript: string | null;
+  characterSheet: string;
   pages: StoryPage[];
 }
 
@@ -260,10 +268,26 @@ async function createStory(request: Request, env: Env): Promise<Response> {
 
   const transcript = payload.transcript?.trim() || transcriptFromAudio;
 
+  // Validate and limit reference images (max 10, reasonable size)
+  const referenceImages: ReferenceImage[] = Array.isArray(payload.referenceImages)
+    ? payload.referenceImages
+        .filter(
+          (img): img is ReferenceImage =>
+            !!img &&
+            typeof img.base64 === "string" &&
+            img.base64.length > 0 &&
+            img.base64.length < 10_000_000 && // ~7.5MB max per image
+            typeof img.mimeType === "string" &&
+            typeof img.description === "string",
+        )
+        .slice(0, 10)
+    : [];
+
   const generated = await generateStoryWithGemini(env, {
     prompt,
     transcript,
     pageCount,
+    referenceImages,
   });
 
   const storyId = crypto.randomUUID();
@@ -283,6 +307,8 @@ async function createStory(request: Request, env: Env): Promise<Response> {
       prompt: page.imagePrompt,
       storyTitle: generated.title,
       pageNumber: page.pageNumber,
+      characterSheet: generated.characterSheet,
+      referenceImages,
     });
 
     let imageKey: string | null = null;
@@ -362,6 +388,7 @@ async function generateStoryWithGemini(
     prompt: string;
     transcript: string | null;
     pageCount: number;
+    referenceImages: ReferenceImage[];
   },
 ): Promise<GeneratedStory> {
   if (!env.GEMINI_API_KEY) {
@@ -372,12 +399,33 @@ async function generateStoryWithGemini(
   const promptLines = [
     "You create illustrated children's storybooks.",
     "Return valid JSON only with this exact shape:",
-    '{"title":"string","transcript":"string|null","pages":[{"pageNumber":1,"text":"string","imagePrompt":"string"}]}',
+    '{"title":"string","transcript":"string|null","characterSheet":"string","pages":[{"pageNumber":1,"text":"string","imagePrompt":"string"}]}',
+    "",
+    "characterSheet: A detailed visual reference describing EVERY character in the story.",
+    "For each character include: species/type, exact colors (fur, skin, hair, eyes), body shape/size,",
+    "clothing or accessories, and any distinguishing features. Be very specific so an illustrator",
+    "could draw the same character consistently across all pages. Example:",
+    '"Lola: a small round guinea pig with golden-orange fur, a white patch on her forehead shaped like a star, big dark brown eyes, wearing a tiny red bandana around her neck."',
+    "",
     `Create exactly ${input.pageCount} pages with pageNumber starting at 1 and increasing by 1.`,
     "Page text should be 35-70 words and age-appropriate.",
-    "Each imagePrompt should describe the same scene from the page text in a warm illustrated style.",
+    "Each imagePrompt MUST begin with the full characterSheet text, then describe the specific scene",
+    "from that page in a warm children's book illustration style. This ensures every illustration",
+    "depicts the characters with identical appearance.",
     `Parent prompt: ${input.prompt}`,
   ];
+
+  if (input.referenceImages.length > 0) {
+    promptLines.push("");
+    promptLines.push("The user has provided reference photos. Use them as inspiration for the story.");
+    promptLines.push("Base the characterSheet on these descriptions:");
+    for (const img of input.referenceImages) {
+      if (img.description) {
+        promptLines.push(`- ${img.description}`);
+      }
+    }
+    promptLines.push("Feature the subjects from these photos as characters, settings, or elements in the story.");
+  }
 
   if (input.transcript) {
     promptLines.push(`Narration transcript: ${input.transcript}`);
@@ -404,6 +452,7 @@ async function generateStoryWithGemini(
   const parsed = parseJsonObject(rawText);
   const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim() : "Untitled Story";
   const transcript = typeof parsed.transcript === "string" && parsed.transcript.trim() ? parsed.transcript.trim() : input.transcript;
+  const characterSheet = typeof parsed.characterSheet === "string" && parsed.characterSheet.trim() ? parsed.characterSheet.trim() : "";
 
   const pages = Array.isArray(parsed.pages)
     ? parsed.pages
@@ -453,13 +502,20 @@ async function generateStoryWithGemini(
   return {
     title,
     transcript: transcript ?? null,
+    characterSheet,
     pages: normalizedPages,
   };
 }
 
 async function generateImageWithGemini(
   env: Env,
-  input: { prompt: string; storyTitle: string; pageNumber: number },
+  input: {
+    prompt: string;
+    storyTitle: string;
+    pageNumber: number;
+    characterSheet: string;
+    referenceImages: ReferenceImage[];
+  },
 ): Promise<{ bytes: Uint8Array; contentType: string; extension: string } | null> {
   if (!env.GEMINI_API_KEY) {
     return createFallbackSvgImage(input.storyTitle, input.pageNumber, input.prompt);
@@ -467,17 +523,47 @@ async function generateImageWithGemini(
 
   const model = env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image-preview";
 
-  const prompt = [
+  const promptParts = [
     "Create a single illustration for a children's storybook page.",
     "No text, no watermark, no signatures.",
     "Soft, colorful, warm, expressive characters.",
-    `Story title: ${input.storyTitle}`,
-    `Page ${input.pageNumber}: ${input.prompt}`,
-  ].join("\n");
+    "",
+    "IMPORTANT — Character visual reference (draw characters EXACTLY as described):",
+    input.characterSheet,
+  ];
+
+  if (input.referenceImages.length > 0) {
+    promptParts.push("");
+    promptParts.push("Reference photos are attached. Make the illustrated subjects resemble what's");
+    promptParts.push("in the photos (same colors, features, appearance) but rendered in warm");
+    promptParts.push("children's storybook illustration style.");
+    for (const img of input.referenceImages) {
+      if (img.description) {
+        promptParts.push(`Photo: ${img.description}`);
+      }
+    }
+  }
+
+  promptParts.push("");
+  promptParts.push(`Story title: ${input.storyTitle}`);
+  promptParts.push(`Page ${input.pageNumber}: ${input.prompt}`);
+
+  const prompt = promptParts.join("\n");
+
+  // Build parts array: text prompt + reference images
+  const parts: Record<string, unknown>[] = [{ text: prompt }];
+  for (const img of input.referenceImages) {
+    parts.push({
+      inlineData: {
+        mimeType: img.mimeType,
+        data: img.base64,
+      },
+    });
+  }
 
   try {
     const response = await callGemini(env, model, {
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      contents: [{ role: "user", parts }],
       generationConfig: {
         responseModalities: ["TEXT", "IMAGE"],
       },
@@ -550,6 +636,7 @@ function generateFallbackStory(prompt: string, transcript: string | null, pageCo
   return {
     title: titleSeed.slice(0, 80),
     transcript,
+    characterSheet: "",
     pages,
   };
 }

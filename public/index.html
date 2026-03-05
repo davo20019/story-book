@@ -81,6 +81,13 @@
               </button>
             </div>
 
+            <div class="input-group">
+              <label>Reference photos <span class="label-hint">(optional)</span></label>
+              <p class="field-desc">Upload photos of people, pets, or places. The illustrations will be inspired by them.</p>
+              <div id="photo-uploads" class="photo-uploads"></div>
+              <button id="add-photo-btn" type="button" class="btn btn-add-photo">+ Add photo</button>
+            </div>
+
             <div id="turnstile-container"></div>
 
             <button type="submit" class="btn btn-magic">
@@ -99,6 +106,7 @@
               <div class="loading-page loading-page-3"></div>
             </div>
             <p class="loading-text">Crafting your story...</p>
+            <p class="loading-subtext">Writing pages and painting illustrations — this takes about a minute.</p>
           </div>
         </div>
       </section>
@@ -151,6 +159,11 @@
           </div>
 
           <div class="page-dots" id="page-dots"></div>
+
+          <div class="voice-picker">
+            <label for="voice-select">Voice:</label>
+            <select id="voice-select"></select>
+          </div>
         </div>
       </section>
     </main>

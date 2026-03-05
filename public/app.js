@@ -26,6 +26,10 @@ const tabPanels = document.querySelectorAll('.tab-panel');
 const CARD_COLORS = ['coral', 'teal', 'lavender', 'sunshine', 'mint'];
 const CARD_ICONS = ['\u{1F4D6}', '\u{1F31F}', '\u{1F98A}', '\u{1F319}', '\u{1F308}', '\u{1F43B}', '\u{1F98B}', '\u{1F3F0}', '\u{1F680}', '\u{1F338}', '\u{1F409}', '\u{1F9F8}'];
 
+const addPhotoBtn = document.querySelector('#add-photo-btn');
+const photoUploads = document.querySelector('#photo-uploads');
+const voiceSelect = document.querySelector('#voice-select');
+
 const state = {
   stories: [],
   activeStory: null,
@@ -35,6 +39,8 @@ const state = {
   readingUtterance: null,
   turnstileSiteKey: null,
   turnstileWidgetId: null,
+  characterPhotos: [], // { base64, mimeType, description }
+  selectedVoiceURI: null,
 };
 
 boot();
@@ -93,6 +99,81 @@ function resetTurnstile() {
   }
 }
 
+// ---- Photo uploads ----
+function addPhotoEntry() {
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'image/*';
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const base64 = dataUrl.split(',')[1];
+      const mimeType = file.type || 'image/jpeg';
+
+      const entry = { base64, mimeType, description: '' };
+      state.characterPhotos.push(entry);
+      renderPhotoEntry(entry, dataUrl);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  fileInput.click();
+}
+
+function renderPhotoEntry(entry, dataUrl) {
+  const row = document.createElement('div');
+  row.className = 'photo-entry';
+
+  const img = document.createElement('img');
+  img.className = 'photo-entry-preview';
+  img.src = dataUrl;
+  img.alt = 'Uploaded character photo';
+  row.appendChild(img);
+
+  const fields = document.createElement('div');
+  fields.className = 'photo-entry-fields';
+
+  const descInput = document.createElement('input');
+  descInput.type = 'text';
+  descInput.placeholder = 'Describe this: e.g. "Bella, my daughter" or "our cat Max"';
+  descInput.addEventListener('input', () => {
+    entry.description = descInput.value;
+  });
+  fields.appendChild(descInput);
+  row.appendChild(fields);
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'photo-entry-remove';
+  removeBtn.textContent = '\u00D7';
+  removeBtn.addEventListener('click', () => {
+    const idx = state.characterPhotos.indexOf(entry);
+    if (idx !== -1) state.characterPhotos.splice(idx, 1);
+    row.remove();
+  });
+  row.appendChild(removeBtn);
+
+  photoUploads.appendChild(row);
+
+  // Focus the description field
+  descInput.focus();
+}
+
+function getCharacterPhotosPayload() {
+  return state.characterPhotos
+    .filter(p => p.base64)
+    .map(p => ({
+      base64: p.base64,
+      mimeType: p.mimeType,
+      description: p.description.trim(),
+    }));
+}
+
 function bindEvents() {
   // Tab navigation
   for (const btn of tabButtons) {
@@ -127,6 +208,10 @@ function bindEvents() {
       if (turnstileToken) {
         body.turnstileToken = turnstileToken;
       }
+      const photos = getCharacterPhotosPayload();
+      if (photos.length > 0) {
+        body.referenceImages = photos;
+      }
 
       const response = await fetch('/api/stories/generate', {
         method: 'POST',
@@ -155,6 +240,15 @@ function bindEvents() {
       setLoading(false);
       resetTurnstile();
     }
+  });
+
+  // Photo uploads
+  addPhotoBtn.addEventListener('click', () => addPhotoEntry());
+
+  // Voice picker
+  voiceSelect.addEventListener('change', () => {
+    state.selectedVoiceURI = voiceSelect.value || null;
+    cachedVoice = null; // clear cache so next read uses the new voice
   });
 
   // Page navigation
@@ -443,6 +537,88 @@ function getSortedPages() {
 }
 
 // ---- Read aloud ----
+
+// Ranked keywords for selecting the best storytelling voice.
+// Prefer premium/natural voices, then female voices (warmer for kids' stories).
+const PREFERRED_VOICE_PATTERNS = [
+  /samantha/i,         // macOS/iOS — natural, warm
+  /karen/i,            // macOS — Australian, friendly
+  /moira/i,            // macOS — Irish, gentle
+  /fiona/i,            // macOS — Scottish
+  /google.*female/i,   // Chrome — decent quality
+  /google.*us.*english/i,
+  /microsoft.*zira/i,  // Windows — natural-ish
+  /microsoft.*aria/i,  // Windows 11 neural
+  /microsoft.*jenny/i, // Windows 11 neural
+];
+
+let cachedVoice = null;
+
+function getBestVoice() {
+  if (cachedVoice) return cachedVoice;
+
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+
+  // If user has picked a voice from the dropdown, use that
+  if (state.selectedVoiceURI) {
+    const picked = voices.find(v => v.voiceURI === state.selectedVoiceURI);
+    if (picked) {
+      cachedVoice = picked;
+      return picked;
+    }
+  }
+
+  // Try each preferred pattern in priority order
+  for (const pattern of PREFERRED_VOICE_PATTERNS) {
+    const match = voices.find(v => pattern.test(v.name));
+    if (match) {
+      cachedVoice = match;
+      return match;
+    }
+  }
+
+  // Fallback: pick the first English voice that isn't a novelty/compact voice
+  const englishVoices = voices.filter(v =>
+    v.lang.startsWith('en') && !/compact|novelty/i.test(v.name)
+  );
+
+  const nonDefault = englishVoices.find(v => !v.default);
+  cachedVoice = nonDefault || englishVoices[0] || voices[0];
+  return cachedVoice;
+}
+
+function populateVoicePicker() {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return;
+
+  while (voiceSelect.firstChild) voiceSelect.removeChild(voiceSelect.firstChild);
+
+  // Filter to English voices and group them
+  const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+  const bestVoice = getBestVoice();
+
+  for (const voice of englishVoices) {
+    const option = document.createElement('option');
+    option.value = voice.voiceURI;
+    const label = voice.name.replace(/Microsoft |Google |Apple /i, '');
+    option.textContent = label;
+    if (voice === bestVoice) option.selected = true;
+    voiceSelect.appendChild(option);
+  }
+}
+
+// Pre-load voices (some browsers load them asynchronously)
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => {
+    cachedVoice = null;
+    populateVoicePicker();
+  };
+  // Some browsers fire onvoiceschanged, some don't — try both
+  setTimeout(() => populateVoicePicker(), 100);
+}
+
 function readAloud() {
   if (!window.speechSynthesis) return;
 
@@ -464,13 +640,19 @@ function readPageAloud(pageIndex, pages) {
   goToPage(pageIndex);
 
   const utterance = new SpeechSynthesisUtterance(pages[pageIndex].text);
-  utterance.rate = 0.85;
-  utterance.pitch = 1.1;
+
+  const voice = getBestVoice();
+  if (voice) {
+    utterance.voice = voice;
+  }
+
+  utterance.rate = 0.9;
+  utterance.pitch = 1.05;
   state.readingUtterance = utterance;
 
   utterance.onend = () => {
     if (state.reading && pageIndex + 1 < pages.length) {
-      setTimeout(() => readPageAloud(pageIndex + 1, pages), 600);
+      setTimeout(() => readPageAloud(pageIndex + 1, pages), 800);
     } else {
       stopReading();
     }
@@ -515,6 +697,15 @@ function setLoading(isLoading) {
   const submitBtn = form.querySelector('button[type="submit"]');
   submitBtn.disabled = isLoading;
   loadingIndicator.hidden = !isLoading;
+
+  const createHeader = document.querySelector('.create-header');
+  if (isLoading) {
+    form.hidden = true;
+    if (createHeader) createHeader.hidden = true;
+  } else {
+    form.hidden = false;
+    if (createHeader) createHeader.hidden = false;
+  }
 }
 
 function celebrateSparkles() {

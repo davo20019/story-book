@@ -410,33 +410,34 @@ textarea::placeholder {
 /* ---- Loading indicator ---- */
 .loading-indicator {
   text-align: center;
-  padding: 2rem 0 0.5rem;
+  padding: 3rem 1rem 2rem;
+  animation: fadeSlideIn 0.4s ease;
 }
 
 .loading-book {
   display: inline-flex;
-  gap: 4px;
+  gap: 8px;
   align-items: flex-end;
 }
 
 .loading-page {
-  width: 14px;
-  border-radius: 3px;
+  width: 28px;
+  border-radius: 6px;
   animation: bookBounce 1.2s ease-in-out infinite;
 }
 
 .loading-page-1 {
-  height: 40px;
+  height: 80px;
   background: var(--coral);
   animation-delay: 0s;
 }
 .loading-page-2 {
-  height: 48px;
+  height: 96px;
   background: var(--teal);
   animation-delay: 0.2s;
 }
 .loading-page-3 {
-  height: 36px;
+  height: 72px;
   background: var(--sunshine);
   animation-delay: 0.4s;
 }
@@ -448,14 +449,22 @@ textarea::placeholder {
 
 .loading-text {
   font-family: var(--font-display);
-  font-weight: 600;
-  color: var(--ink-soft);
-  margin: 0.75rem 0 0;
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--ink);
+  margin: 1.5rem 0 0;
   animation: pulse-text 2s ease-in-out infinite;
 }
 
+.loading-subtext {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--ink-faint);
+  margin: 0.5rem 0 0;
+}
+
 @keyframes pulse-text {
-  0%, 100% { opacity: 0.6; }
+  0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
 }
 
@@ -749,6 +758,128 @@ textarea::placeholder {
 .book-card[data-color="lavender"] .book-card-cover-placeholder { background: linear-gradient(135deg, rgba(195,166,224,0.3), rgba(255,140,107,0.15)); color: var(--lavender); }
 .book-card[data-color="sunshine"] .book-card-cover-placeholder { background: linear-gradient(135deg, rgba(255,209,102,0.35), rgba(255,140,107,0.15)); color: var(--sunshine-deep); }
 .book-card[data-color="mint"] .book-card-cover-placeholder { background: linear-gradient(135deg, rgba(126,221,181,0.3), rgba(107,197,232,0.15)); color: var(--mint); }
+
+/* ---- Photo uploads ---- */
+.label-hint {
+  font-weight: 400;
+  color: var(--ink-faint);
+  font-size: 0.85em;
+}
+
+.field-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ink-faint);
+  line-height: 1.4;
+}
+
+.photo-uploads {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.photo-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: white;
+  border: 2px solid var(--stroke-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.65rem;
+}
+
+.photo-entry-preview {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(107, 197, 232, 0.1);
+}
+
+.photo-entry-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.photo-entry-fields input {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
+  background: var(--cream);
+  color: var(--ink);
+}
+
+.photo-entry-fields input:focus {
+  outline: none;
+  border-color: var(--teal);
+}
+
+.photo-entry-remove {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 0.2rem;
+  line-height: 1;
+  border-radius: 50%;
+  transition: color 0.15s ease;
+}
+
+.photo-entry-remove:hover {
+  color: var(--coral-deep);
+}
+
+.btn-add-photo {
+  background: rgba(107, 197, 232, 0.12);
+  color: var(--teal-deep);
+  border: 2px dashed rgba(107, 197, 232, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 1rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-photo:hover {
+  background: rgba(107, 197, 232, 0.22);
+  border-color: var(--teal);
+}
+
+/* ---- Voice picker ---- */
+.voice-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.voice-picker label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+}
+
+.voice-picker select {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  max-width: 220px;
+}
 
 /* ---- Responsive ---- */
 @media (max-width: 640px) {
