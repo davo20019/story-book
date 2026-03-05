@@ -256,10 +256,22 @@ function bindEvents() {
   // Photo uploads
   addPhotoBtn.addEventListener('click', () => addPhotoEntry());
 
-  // Voice picker
+  // Voice picker — hot-swap while reading
   voiceSelect.addEventListener('change', () => {
     state.selectedVoiceURI = voiceSelect.value || null;
-    cachedVoice = null; // clear cache so next read uses the new voice
+    cachedVoice = null;
+
+    if (state.reading) {
+      const currentPage = state.currentPage;
+      const pages = getSortedPages();
+      // Detach callbacks before canceling so stopReading isn't triggered
+      if (state.readingUtterance) {
+        state.readingUtterance.onend = null;
+        state.readingUtterance.onerror = null;
+      }
+      window.speechSynthesis.cancel();
+      readPageAloud(currentPage, pages);
+    }
   });
 
   // Page navigation
@@ -566,19 +578,17 @@ const PREFERRED_VOICE_PATTERNS = [
 let cachedVoice = null;
 
 function getBestVoice() {
-  if (cachedVoice) return cachedVoice;
-
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
 
-  // If user has picked a voice from the dropdown, use that
+  // If user has picked a voice, always look it up fresh (don't rely on cache)
   if (state.selectedVoiceURI) {
     const picked = voices.find(v => v.voiceURI === state.selectedVoiceURI);
-    if (picked) {
-      cachedVoice = picked;
-      return picked;
-    }
+    if (picked) return picked;
   }
+
+  // For auto-detection, use cache to avoid re-scanning
+  if (cachedVoice) return cachedVoice;
 
   // Try each preferred pattern in priority order
   for (const pattern of PREFERRED_VOICE_PATTERNS) {
@@ -603,6 +613,9 @@ function populateVoicePicker() {
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return;
 
+  // Preserve user selection across dropdown rebuilds
+  const savedURI = state.selectedVoiceURI;
+
   while (voiceSelect.firstChild) voiceSelect.removeChild(voiceSelect.firstChild);
 
   // Filter to English voices and group them
@@ -616,6 +629,12 @@ function populateVoicePicker() {
     option.textContent = label;
     if (voice === bestVoice) option.selected = true;
     voiceSelect.appendChild(option);
+  }
+
+  // Restore user selection in case the rebuild interfered
+  if (savedURI) {
+    state.selectedVoiceURI = savedURI;
+    voiceSelect.value = savedURI;
   }
 }
 
