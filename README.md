@@ -65,7 +65,13 @@ npx wrangler d1 create storybook-db
 npx wrangler r2 bucket create storybook-assets
 ```
 
-3. **Configure:** Update `wrangler.toml` with the `database_id` returned by the D1 create command.
+3. **Configure:** Copy the example config and fill in your D1 database ID:
+
+```bash
+cp wrangler.example.toml wrangler.toml
+```
+
+Update `wrangler.toml` with the `database_id` returned by the D1 create command.
 
 4. **Apply the database schema:**
 
@@ -130,7 +136,7 @@ Optional fields: `transcript`, `audioBase64`, `audioMimeType` (for audio-based i
 │   └── index.ts         # Cloudflare Worker — API routes + Gemini integration
 ├── migrations/
 │   └── 0001_init.sql    # D1 database schema
-├── wrangler.toml        # Cloudflare Workers configuration
+├── wrangler.example.toml # Cloudflare Workers config template (copy to wrangler.toml)
 ├── tsconfig.json
 └── package.json
 ```
