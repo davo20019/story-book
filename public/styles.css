@@ -361,8 +361,13 @@ textarea::placeholder {
   box-shadow: 0 4px 14px rgba(107, 197, 232, 0.35);
 }
 
+.button-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
 .btn-magic {
-  width: 100%;
+  flex: 1;
   background: linear-gradient(135deg, var(--coral), var(--coral-deep));
   color: white;
   font-size: 1.15rem;
@@ -377,6 +382,24 @@ textarea::placeholder {
 }
 
 .btn-magic:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-surprise {
+  background: linear-gradient(135deg, var(--sunshine), var(--sunshine-deep));
+  color: white;
+  font-size: 1rem;
+  padding: 0.9rem 1.4rem;
+  box-shadow: 0 4px 18px rgba(255, 209, 102, 0.35);
+  white-space: nowrap;
+}
+
+.btn-surprise:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 28px rgba(255, 209, 102, 0.45);
+}
+
+.btn-surprise:active:not(:disabled) {
   transform: translateY(0) scale(0.98);
 }
 

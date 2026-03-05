@@ -26,6 +26,7 @@ const tabPanels = document.querySelectorAll('.tab-panel');
 const CARD_COLORS = ['coral', 'teal', 'lavender', 'sunshine', 'mint'];
 const CARD_ICONS = ['\u{1F4D6}', '\u{1F31F}', '\u{1F98A}', '\u{1F319}', '\u{1F308}', '\u{1F43B}', '\u{1F98B}', '\u{1F3F0}', '\u{1F680}', '\u{1F338}', '\u{1F409}', '\u{1F9F8}'];
 
+const surpriseBtn = document.querySelector('#surprise-btn');
 const addPhotoBtn = document.querySelector('#add-photo-btn');
 const photoUploads = document.querySelector('#photo-uploads');
 const voiceSelect = document.querySelector('#voice-select');
@@ -97,6 +98,29 @@ function resetTurnstile() {
   if (window.turnstile && state.turnstileWidgetId != null) {
     window.turnstile.reset(state.turnstileWidgetId);
   }
+}
+
+// ---- Surprise me ----
+const SURPRISE_PROMPTS = [
+  'A tiny dragon who is afraid of fire learns to be brave with the help of a kind owl.',
+  'A penguin travels to the jungle and discovers a world of colorful butterflies.',
+  'Two siblings find a magical door in their attic that leads to a candy kingdom.',
+  'A lost star falls from the sky and a little mouse helps it find its way home.',
+  'A bear cub and a baby deer become best friends during their first winter.',
+  'A pirate cat sails across a milk ocean to find the legendary golden fish.',
+  'A shy cloud learns to make rainbows after meeting a cheerful sunbeam.',
+  'A robot and a puppy go on an adventure to find the last flower on Earth.',
+  'A little girl discovers she can talk to trees, and they have the funniest jokes.',
+  'An octopus opens an underwater bakery and makes cakes for all the sea creatures.',
+  'A family of foxes moves to a new forest and makes unexpected friends.',
+  'A magical paintbrush brings everything it draws to life in a quiet village.',
+  'Twin kittens explore a haunted house that turns out to be full of friendly ghosts.',
+  'A baby elephant gets lost in a rainstorm and is rescued by a troupe of dancing frogs.',
+  'A grandma and her granddaughter build a rocket ship out of cardboard and fly to the moon.',
+];
+
+function getRandomPrompt() {
+  return SURPRISE_PROMPTS[Math.floor(Math.random() * SURPRISE_PROMPTS.length)];
 }
 
 // ---- Photo uploads ----
@@ -240,6 +264,13 @@ function bindEvents() {
       setLoading(false);
       resetTurnstile();
     }
+  });
+
+  // Surprise me
+  surpriseBtn.addEventListener('click', () => {
+    if (state.loading) return;
+    promptInput.value = getRandomPrompt();
+    form.requestSubmit();
   });
 
   // Photo uploads
