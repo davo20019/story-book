@@ -25,3 +25,5 @@ bucket_name = "storybook-assets"
 GEMINI_TEXT_MODEL = "gemini-2.5-flash"
 GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
 MAX_PAGES = "8"
+DAILY_LIMIT_PER_IP = "5"
+# TURNSTILE_SITE_KEY = ""  # Set after creating a Turnstile widget

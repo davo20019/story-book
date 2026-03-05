@@ -6,6 +6,9 @@ interface Env {
   GEMINI_TEXT_MODEL?: string;
   GEMINI_IMAGE_MODEL?: string;
   MAX_PAGES?: string;
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  DAILY_LIMIT_PER_IP?: string;
 }
 
 interface GenerateStoryRequest {
@@ -14,6 +17,7 @@ interface GenerateStoryRequest {
   audioBase64?: string;
   audioMimeType?: string;
   pageCount?: number;
+  turnstileToken?: string;
 }
 
 interface StoryPage {
@@ -76,6 +80,12 @@ async function handleApiRequest(
   }
 
   try {
+    if (request.method === "GET" && url.pathname === "/api/config") {
+      return jsonResponse({
+        turnstileSiteKey: env.TURNSTILE_SITE_KEY || null,
+      });
+    }
+
     if (request.method === "GET" && url.pathname === "/api/health") {
       return jsonResponse({ ok: true, timestamp: new Date().toISOString() });
     }
@@ -209,7 +219,31 @@ async function getImage(env: Env, key: string): Promise<Response> {
 }
 
 async function createStory(request: Request, env: Env): Promise<Response> {
+  const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+
   const payload = (await request.json()) as GenerateStoryRequest;
+
+  // Turnstile verification
+  if (env.TURNSTILE_SECRET_KEY) {
+    const token = payload.turnstileToken ?? "";
+    if (!token) {
+      return jsonResponse({ error: "Please complete the verification challenge." }, 403);
+    }
+
+    const verified = await verifyTurnstile(env.TURNSTILE_SECRET_KEY, token, clientIp);
+    if (!verified) {
+      return jsonResponse({ error: "Verification failed. Please try again." }, 403);
+    }
+  }
+
+  // IP-based daily rate limit
+  const dailyLimit = Number.parseInt(env.DAILY_LIMIT_PER_IP ?? "5", 10);
+  const rateLimitResult = await checkAndIncrementRateLimit(env.DB, clientIp, dailyLimit);
+  if (!rateLimitResult.allowed) {
+    return jsonResponse({
+      error: `You've reached the daily limit of ${dailyLimit} stories. Come back tomorrow!`,
+    }, 429);
+  }
 
   const prompt = payload.prompt?.trim() ?? "";
   if (!prompt) {
@@ -617,6 +651,54 @@ function findInlineDataPart(response: Record<string, unknown>): { data: string; 
   }
 
   return null;
+}
+
+async function verifyTurnstile(secretKey: string, token: string, ip: string): Promise<boolean> {
+  try {
+    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        secret: secretKey,
+        response: token,
+        remoteip: ip,
+      }),
+    });
+
+    const result = (await response.json()) as Record<string, unknown>;
+    return result.success === true;
+  } catch {
+    return false;
+  }
+}
+
+async function checkAndIncrementRateLimit(
+  db: D1Database,
+  ip: string,
+  dailyLimit: number,
+): Promise<{ allowed: boolean; count: number }> {
+  const dateKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+
+  const row = await db
+    .prepare("SELECT request_count FROM rate_limits WHERE ip = ?1 AND date_key = ?2")
+    .bind(ip, dateKey)
+    .first<{ request_count: number }>();
+
+  const currentCount = row?.request_count ?? 0;
+
+  if (currentCount >= dailyLimit) {
+    return { allowed: false, count: currentCount };
+  }
+
+  await db
+    .prepare(
+      `INSERT INTO rate_limits (ip, date_key, request_count) VALUES (?1, ?2, 1)
+       ON CONFLICT (ip, date_key) DO UPDATE SET request_count = request_count + 1`,
+    )
+    .bind(ip, dateKey)
+    .run();
+
+  return { allowed: true, count: currentCount + 1 };
 }
 
 function parseJsonObject(rawText: string): Record<string, unknown> {

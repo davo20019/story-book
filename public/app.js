@@ -33,6 +33,8 @@ const state = {
   loading: false,
   reading: false,
   readingUtterance: null,
+  turnstileSiteKey: null,
+  turnstileWidgetId: null,
 };
 
 boot();
@@ -40,7 +42,55 @@ boot();
 async function boot() {
   configureSpeechRecognition();
   bindEvents();
+  await loadConfig();
   await loadStories();
+}
+
+async function loadConfig() {
+  try {
+    const response = await fetch('/api/config');
+    const config = await response.json();
+
+    if (config.turnstileSiteKey) {
+      state.turnstileSiteKey = config.turnstileSiteKey;
+      loadTurnstileScript(config.turnstileSiteKey);
+    }
+  } catch {
+    // Config fetch failed — Turnstile will be skipped
+  }
+}
+
+function loadTurnstileScript(siteKey) {
+  const script = document.createElement('script');
+  script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad';
+  script.async = true;
+
+  window.onTurnstileLoad = () => {
+    const container = document.querySelector('#turnstile-container');
+    if (container && window.turnstile) {
+      state.turnstileWidgetId = window.turnstile.render(container, {
+        sitekey: siteKey,
+        size: 'compact',
+        appearance: 'interaction-only',
+        'refresh-expired': 'auto',
+      });
+    }
+  };
+
+  document.head.appendChild(script);
+}
+
+function getTurnstileToken() {
+  if (!state.turnstileSiteKey || !window.turnstile || state.turnstileWidgetId == null) {
+    return null;
+  }
+  return window.turnstile.getResponse(state.turnstileWidgetId) || null;
+}
+
+function resetTurnstile() {
+  if (window.turnstile && state.turnstileWidgetId != null) {
+    window.turnstile.reset(state.turnstileWidgetId);
+  }
 }
 
 function bindEvents() {
@@ -65,11 +115,23 @@ function bindEvents() {
     setLoading(true);
     setStatus('');
 
+    const turnstileToken = getTurnstileToken();
+    if (state.turnstileSiteKey && !turnstileToken) {
+      setStatus('Please complete the verification first.');
+      setLoading(false);
+      return;
+    }
+
     try {
+      const body = { prompt, pageCount };
+      if (turnstileToken) {
+        body.turnstileToken = turnstileToken;
+      }
+
       const response = await fetch('/api/stories/generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt, pageCount }),
+        body: JSON.stringify(body),
       });
 
       const payload = await response.json();
@@ -91,6 +153,7 @@ function bindEvents() {
       setStatus(error instanceof Error ? error.message : 'Generation failed.');
     } finally {
       setLoading(false);
+      resetTurnstile();
     }
   });
 
