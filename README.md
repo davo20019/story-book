@@ -53,8 +53,8 @@ Static assets (HTML, CSS, JS) are served directly from Workers Assets. The Worke
 1. **Clone and install:**
 
 ```bash
-git clone https://github.com/davo20019/story-nook.git
-cd story-nook
+git clone https://github.com/davo20019/story-book.git
+cd story-book
 npm install
 ```
 
