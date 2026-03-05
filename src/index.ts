@@ -290,27 +290,30 @@ async function createStory(request: Request, env: Env): Promise<Response> {
     referenceImages,
   });
 
+  // Generate ALL images in parallel before any DB writes.
+  // This avoids partial stories if the worker times out mid-generation.
+  const imageResults = await Promise.all(
+    generated.pages.map((page) =>
+      generateImageWithGemini(env, {
+        prompt: page.imagePrompt,
+        storyTitle: generated.title,
+        pageNumber: page.pageNumber,
+        characterSheet: generated.characterSheet,
+        referenceImages,
+      }),
+    ),
+  );
+
+  // Everything generated — now persist to DB and R2
   const storyId = crypto.randomUUID();
   const now = new Date().toISOString();
-
-  await env.DB.prepare(
-    `INSERT INTO stories (id, title, prompt, transcript, cover_image_key, created_at, updated_at)
-    VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6)`,
-  )
-    .bind(storyId, generated.title, prompt, generated.transcript, now, now)
-    .run();
-
   let coverImageKey: string | null = null;
 
-  for (const page of generated.pages) {
-    const imageResult = await generateImageWithGemini(env, {
-      prompt: page.imagePrompt,
-      storyTitle: generated.title,
-      pageNumber: page.pageNumber,
-      characterSheet: generated.characterSheet,
-      referenceImages,
-    });
-
+  // Upload images to R2 and collect keys
+  const imageKeys: (string | null)[] = [];
+  for (let i = 0; i < generated.pages.length; i++) {
+    const page = generated.pages[i];
+    const imageResult = imageResults[i];
     let imageKey: string | null = null;
 
     if (imageResult) {
@@ -327,17 +330,25 @@ async function createStory(request: Request, env: Env): Promise<Response> {
       }
     }
 
+    imageKeys.push(imageKey);
+  }
+
+  // Insert story row
+  await env.DB.prepare(
+    `INSERT INTO stories (id, title, prompt, transcript, cover_image_key, created_at, updated_at)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+  )
+    .bind(storyId, generated.title, prompt, generated.transcript, coverImageKey, now, now)
+    .run();
+
+  // Insert all page rows
+  for (let i = 0; i < generated.pages.length; i++) {
+    const page = generated.pages[i];
     await env.DB.prepare(
       `INSERT INTO pages (story_id, page_number, text, image_prompt, image_key, created_at)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
     )
-      .bind(storyId, page.pageNumber, page.text, page.imagePrompt, imageKey, now)
-      .run();
-  }
-
-  if (coverImageKey) {
-    await env.DB.prepare(`UPDATE stories SET cover_image_key = ?1, updated_at = ?2 WHERE id = ?3`)
-      .bind(coverImageKey, now, storyId)
+      .bind(storyId, page.pageNumber, page.text, page.imagePrompt, imageKeys[i], now)
       .run();
   }
 
